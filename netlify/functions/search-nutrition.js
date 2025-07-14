@@ -1,11 +1,7 @@
 // netlify/functions/search-nutrition.js
 
-// Impor 'node-fetch' jika diperlukan di lingkungan Node.js
-// Netlify Functions v2 menggunakan Node.js runtime
-const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
-
 export const handler = async (event) => {
-  console.log("Function search-nutrition invoked.");
+  console.log("--- Function Invoked ---");
 
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method Not Allowed' };
@@ -13,16 +9,12 @@ export const handler = async (event) => {
 
   try {
     const { ingredientName } = JSON.parse(event.body);
-    console.log("Received request for ingredient:", ingredientName);
-
-    if (!ingredientName) {
-      return { statusCode: 400, body: 'Ingredient name is required' };
-    }
+    console.log(`Request for: ${ingredientName}`);
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      console.error("FATAL: GEMINI_API_KEY environment variable is not set in Netlify!");
-      throw new Error("Server configuration error: API key is missing.");
+      console.error("FATAL: GEMINI_API_KEY is missing in Netlify environment variables.");
+      throw new Error("Server configuration error.");
     }
 
     const prompt = `Berikan data gizi untuk "${ingredientName}" per 100 gram. Hanya berikan nilai karbohidrat, protein, dan lemak.`;
@@ -32,11 +24,7 @@ export const handler = async (event) => {
         responseMimeType: "application/json",
         responseSchema: {
           type: "OBJECT",
-          properties: {
-            "carbs": { "type": "NUMBER" },
-            "protein": { "type": "NUMBER" },
-            "fat": { "type": "NUMBER" }
-          },
+          properties: { "carbs": { "type": "NUMBER" }, "protein": { "type": "NUMBER" }, "fat": { "type": "NUMBER" } },
           required: ["carbs", "protein", "fat"]
         }
       }
@@ -44,21 +32,22 @@ export const handler = async (event) => {
 
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
-    console.log("Sending request to Google AI API...");
+    console.log("Sending request to Google...");
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
 
+    const responseBody = await response.text();
+
     if (!response.ok) {
-      const errorBody = await response.text();
-      console.error('Google AI API Error:', response.status, errorBody);
-      throw new Error(`API error: ${response.statusText}`);
+      console.error('Google API Error Response:', response.status, responseBody);
+      throw new Error(`Google API Error: ${response.statusText}`);
     }
 
-    const result = await response.json();
-    console.log("Successfully received response from Google AI API.");
+    console.log("Success from Google. Parsing JSON...");
+    const result = JSON.parse(responseBody);
 
     return {
       statusCode: 200,
@@ -66,7 +55,7 @@ export const handler = async (event) => {
     };
 
   } catch (err) {
-    console.error('Function execution failed:', err);
+    console.error('!!! UNCAUGHT ERROR !!!:', err);
     return {
       statusCode: 500,
       body: JSON.stringify({ error: err.message }),
