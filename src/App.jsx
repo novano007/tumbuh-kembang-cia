@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, doc, deleteDoc, serverTimestamp, query, updateDoc } from 'firebase/firestore';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
@@ -36,6 +36,7 @@ const userFirebaseConfig = {
   appId: "1:613467146113:web:0f7b57787f40e277688a80"
 };
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : userFirebaseConfig;
+const appId = typeof __app_id !== 'undefined' ? __app_id : "tumbuh-kembang-cia";
 
 const getAgeInMonths = (birthDate, measurementDate) => {
     const bd = new Date(birthDate); const md = new Date(measurementDate);
@@ -60,7 +61,10 @@ const Modal = ({ isOpen, onClose, children }) => {
 };
 
 // --- Komponen baris bahan makanan (RESPONSIVE) ---
-const IngredientRow = ({ ingredient, index, onIngredientChange, onRemove }) => {
+const IngredientRow = ({ ingredient, index, onIngredientChange, onRemove, onSearch, dynamicNutritionDB, searchingIngredient }) => {
+    const isKnown = dynamicNutritionDB[ingredient.name.toLowerCase()];
+    const isSearching = searchingIngredient === ingredient.name;
+
     return (
         <div className="flex flex-col gap-2 p-3 border border-gray-200 rounded-lg mb-3 bg-gray-50 md:flex-row md:items-center">
             <input type="text" value={ingredient.name} onChange={e => onIngredientChange(index, 'name', e.target.value)} placeholder="Nama Bahan" list="nutrition-list" className="w-full p-2 border border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500 md:flex-1" />
@@ -70,6 +74,14 @@ const IngredientRow = ({ ingredient, index, onIngredientChange, onRemove }) => {
                     <option value="g">g</option>
                     <option value="ml">ml</option>
                 </select>
+                <div className="flex-grow"></div>
+                {isSearching ? (
+                     <div className="w-24 flex justify-center items-center"><div className="w-6 h-6 border-2 border-pink-400 border-t-transparent border-solid rounded-full animate-spin"></div></div>
+                ) : !isKnown && ingredient.name ? (
+                    <button type="button" onClick={() => onSearch(ingredient.name)} className="w-24 text-xs bg-purple-100 text-purple-700 font-semibold py-2 px-2 rounded-lg hover:bg-purple-200 transition-colors">Cari Gizi</button>
+                ) : (
+                   <div className="w-24"></div>
+                )}
                 <button type="button" onClick={() => onRemove(index)} className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-100 transition-colors text-xl">&times;</button>
             </div>
         </div>
@@ -87,13 +99,16 @@ function MpasiTracker({ db }) {
     const [currentItem, setCurrentItem] = useState(null);
     const [newEntry, setNewEntry] = useState({ date: new Date().toISOString().split('T')[0], ingredients: [{ name: '', amount: '', unit: 'g' }], reaction: '' });
     
-    const collectionPath = "bricia-data/food-log/entries";
+    const [dynamicNutritionDB, setDynamicNutritionDB] = useState(initialNutritionDB);
+    const [searchingIngredient, setSearchingIngredient] = useState(null);
+
+    const collectionPath = `artifacts/${appId}/public/data/foodLog`;
 
     const calculateNutrition = (ingredients) => {
         let total = { carbs: 0, protein: 0, fat: 0 };
         if (!Array.isArray(ingredients)) return total;
         ingredients.forEach(item => {
-            const food = initialNutritionDB[item.name.toLowerCase()];
+            const food = dynamicNutritionDB[item.name.toLowerCase()];
             if (food) {
                 total.carbs += (food.carbs / 100) * item.amount;
                 total.protein += (food.protein / 100) * item.amount;
@@ -101,6 +116,59 @@ function MpasiTracker({ db }) {
             }
         });
         return total;
+    };
+
+    const handleSearchNutrition = async (ingredientName) => {
+        if (!ingredientName || dynamicNutritionDB[ingredientName.toLowerCase()]) return;
+        setSearchingIngredient(ingredientName);
+        setError(null);
+
+        try {
+            const prompt = `Berikan data gizi untuk "${ingredientName}" per 100 gram. Hanya berikan nilai karbohidrat, protein, dan lemak.`;
+            const payload = {
+              contents: [{ role: "user", parts: [{ text: prompt }] }],
+              generationConfig: {
+                  responseMimeType: "application/json",
+                  responseSchema: {
+                      type: "OBJECT",
+                      properties: { "carbs": { "type": "NUMBER" }, "protein": { "type": "NUMBER" }, "fat": { "type": "NUMBER" } },
+                      required: ["carbs", "protein", "fat"]
+                  }
+              }
+            };
+            const apiKey = ""; 
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+            
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error.message || `API error: ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            
+            if (result.candidates && result.candidates.length > 0 && result.candidates[0].content.parts.length > 0) {
+                const text = result.candidates[0].content.parts[0].text;
+                const nutritionData = JSON.parse(text);
+                setDynamicNutritionDB(prevDB => ({
+                    ...prevDB,
+                    [ingredientName.toLowerCase()]: nutritionData
+                }));
+            } else {
+                throw new Error("Data gizi tidak ditemukan dari API.");
+            }
+
+        } catch (err) {
+            console.error("Gagal mencari data gizi:", err);
+            setError(`Gagal mencari data gizi untuk ${ingredientName}. Coba lagi.`);
+        } finally {
+            setSearchingIngredient(null);
+        }
     };
 
     useEffect(() => {
@@ -181,7 +249,7 @@ function MpasiTracker({ db }) {
                 <div>
                     <label className="block text-sm font-medium text-gray-600 mb-2">Bahan Makanan</label>
                     {newEntry.ingredients.map((ing, index) => (
-                        <IngredientRow key={index} ingredient={ing} index={index} onIngredientChange={handleNewIngredientChange} onRemove={removeNewIngredient} />
+                        <IngredientRow key={index} ingredient={ing} index={index} onIngredientChange={handleNewIngredientChange} onRemove={removeNewIngredient} onSearch={handleSearchNutrition} dynamicNutritionDB={dynamicNutritionDB} searchingIngredient={searchingIngredient} />
                     ))}
                     <button type="button" onClick={addNewIngredient} className="text-sm text-pink-600 hover:text-pink-800 font-semibold">+ Tambah Bahan</button>
                 </div>
@@ -219,7 +287,7 @@ function MpasiTracker({ db }) {
                         <div>
                             <label className="block text-sm font-medium text-gray-600 mb-2">Bahan Makanan</label>
                             {currentItem.ingredients.map((ing, index) => (
-                                <IngredientRow key={index} ingredient={ing} index={index} onIngredientChange={handleEditIngredientChange} onRemove={removeEditIngredient} />
+                                <IngredientRow key={index} ingredient={ing} index={index} onIngredientChange={handleEditIngredientChange} onRemove={removeEditIngredient} onSearch={handleSearchNutrition} dynamicNutritionDB={dynamicNutritionDB} searchingIngredient={searchingIngredient} />
                             ))}
                             <button type="button" onClick={addEditIngredient} className="text-sm text-pink-600 hover:text-pink-800 font-semibold">+ Tambah Bahan</button>
                         </div>
