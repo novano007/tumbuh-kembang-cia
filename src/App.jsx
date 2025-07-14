@@ -69,27 +69,49 @@ const Modal = ({ isOpen, onClose, children }) => {
     return (<div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={onClose}><div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-lg mx-4" onClick={e => e.stopPropagation()}>{children}</div></div>);
 };
 
-// Komponen baris bahan makanan (DIPINDAHKAN KE LUAR)
+// --- Komponen baris bahan makanan (RESPONSIVE) ---
 const IngredientRow = ({ ingredient, index, onIngredientChange, onRemove, onSearch, dynamicNutritionDB, searchingIngredient }) => {
     const isKnown = dynamicNutritionDB[ingredient.name.toLowerCase()];
     const isSearching = searchingIngredient === ingredient.name;
 
     return (
-        <div className="flex items-center gap-2 mb-2">
-            <input type="text" value={ingredient.name} onChange={e => onIngredientChange(index, 'name', e.target.value)} placeholder="Nama Bahan" list="nutrition-list" className="w-full p-2 border border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500" />
-            <input type="number" value={ingredient.amount} onChange={e => onIngredientChange(index, 'amount', e.target.value)} placeholder="Jumlah" className="w-24 p-2 border border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500" />
-            <select value={ingredient.unit} onChange={e => onIngredientChange(index, 'unit', e.target.value)} className="p-2 border border-gray-300 rounded-lg bg-white focus:ring-pink-500 focus:border-pink-500">
-                <option value="g">g</option>
-                <option value="ml">ml</option>
-            </select>
-            {isSearching ? (
-                 <div className="w-28 text-center"><div className="w-5 h-5 border-2 border-pink-400 border-t-transparent border-solid rounded-full animate-spin inline-block"></div></div>
-            ) : !isKnown && ingredient.name ? (
-                <button type="button" onClick={() => onSearch(ingredient.name)} className="w-28 text-xs bg-purple-100 text-purple-700 font-semibold py-2 px-2 rounded-lg hover:bg-purple-200 transition-colors">Cari Gizi</button>
-            ) : (
-                <div className="w-28"></div>
-            )}
-            <button type="button" onClick={() => onRemove(index)} className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-100 transition-colors">&times;</button>
+        <div className="flex flex-col gap-2 p-3 border border-gray-200 rounded-lg mb-3 bg-gray-50 md:flex-row md:items-center">
+            {/* Input Nama Bahan */}
+            <input 
+                type="text" 
+                value={ingredient.name} 
+                onChange={e => onIngredientChange(index, 'name', e.target.value)} 
+                placeholder="Nama Bahan" 
+                list="nutrition-list" 
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500 md:flex-1" 
+            />
+            {/* Grup untuk Jumlah, Satuan, dan Aksi */}
+            <div className="flex items-center gap-2 w-full md:w-auto">
+                <input 
+                    type="number" 
+                    value={ingredient.amount} 
+                    onChange={e => onIngredientChange(index, 'amount', e.target.value)} 
+                    placeholder="Jumlah" 
+                    className="w-20 p-2 border border-gray-300 rounded-lg focus:ring-pink-500 focus:border-pink-500" 
+                />
+                <select 
+                    value={ingredient.unit} 
+                    onChange={e => onIngredientChange(index, 'unit', e.target.value)} 
+                    className="p-2 border border-gray-300 rounded-lg bg-white focus:ring-pink-500 focus:border-pink-500"
+                >
+                    <option value="g">g</option>
+                    <option value="ml">ml</option>
+                </select>
+                <div className="flex-grow"></div> {/* Spacer */}
+                {isSearching ? (
+                     <div className="w-24 flex justify-center items-center"><div className="w-6 h-6 border-2 border-pink-400 border-t-transparent border-solid rounded-full animate-spin"></div></div>
+                ) : !isKnown && ingredient.name ? (
+                    <button type="button" onClick={() => onSearch(ingredient.name)} className="w-24 text-xs bg-purple-100 text-purple-700 font-semibold py-2 px-2 rounded-lg hover:bg-purple-200 transition-colors">Cari Gizi</button>
+                ) : (
+                   <div className="w-24"></div> // Placeholder
+                )}
+                <button type="button" onClick={() => onRemove(index)} className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-100 transition-colors text-xl">&times;</button>
+            </div>
         </div>
     );
 };
