@@ -46,7 +46,6 @@ const appId = typeof __app_id !== 'undefined'
     ? __app_id 
     : "tumbuh-kembang-cia";
 
-
 const getAgeInMonths = (birthDate, measurementDate) => {
     const bd = new Date(birthDate); const md = new Date(measurementDate);
     let months = (md.getFullYear() - bd.getFullYear()) * 12;
@@ -118,7 +117,7 @@ const IngredientRow = ({ ingredient, index, onIngredientChange, onRemove, onSear
 
 
 // --- Komponen Fitur ---
-function MpasiTracker({ db, userId }) {
+function MpasiTracker({ db }) {
     const [entries, setEntries] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -187,15 +186,20 @@ function MpasiTracker({ db, userId }) {
     };
 
     useEffect(() => {
-        if (!db || !userId) return;
-        const q = query(collection(db, `artifacts/${appId}/users/${userId}/foodLog`));
+        if (!db) return;
+        const collectionPath = `artifacts/${appId}/public/data/foodLog`;
+        const q = query(collection(db, collectionPath));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             data.sort((a, b) => new Date(b.date) - new Date(a.date));
             setEntries(data); setIsLoading(false);
-        }, (err) => { setError("Gagal mengambil data MPASI."); setIsLoading(false); });
+        }, (err) => { 
+            console.error("Firebase onSnapshot error:", err);
+            setError("Gagal mengambil data MPASI."); 
+            setIsLoading(false); 
+        });
         return unsubscribe;
-    }, [db, userId]);
+    }, [db]);
 
     const handleNewIngredientChange = (index, field, value) => {
         const updatedIngredients = newEntry.ingredients.map((item, i) => 
@@ -211,7 +215,8 @@ function MpasiTracker({ db, userId }) {
         const validIngredients = newEntry.ingredients.filter(ing => ing.name && ing.amount > 0).map(ing => ({ name: ing.name, amount: parseFloat(ing.amount), unit: ing.unit }));
         if (validIngredients.length === 0) { alert("Harap masukkan setidaknya satu bahan makanan dengan jumlah yang valid."); return; }
         try {
-            await addDoc(collection(db, `artifacts/${appId}/users/${userId}/foodLog`), { ...newEntry, ingredients: validIngredients, createdAt: serverTimestamp() });
+            const collectionPath = `artifacts/${appId}/public/data/foodLog`;
+            await addDoc(collection(db, collectionPath), { ...newEntry, ingredients: validIngredients, createdAt: serverTimestamp() });
             setNewEntry({ date: new Date().toISOString().split('T')[0], ingredients: [{ name: '', amount: '', unit: 'g' }], reaction: '' });
         } catch (err) { setError("Gagal menyimpan data."); }
     };
@@ -222,7 +227,8 @@ function MpasiTracker({ db, userId }) {
         const validIngredients = currentItem.ingredients.filter(ing => ing.name && ing.amount > 0).map(ing => ({ name: ing.name, amount: parseFloat(ing.amount), unit: ing.unit }));
         if (validIngredients.length === 0) { alert("Harap masukkan setidaknya satu bahan makanan."); return; }
         try {
-            const docRef = doc(db, `artifacts/${appId}/users/${userId}/foodLog`, currentItem.id);
+            const collectionPath = `artifacts/${appId}/public/data/foodLog`;
+            const docRef = doc(db, collectionPath, currentItem.id);
             await updateDoc(docRef, { ...currentItem, ingredients: validIngredients });
             setEditModalOpen(false); setCurrentItem(null);
         } catch (err) { setError("Gagal memperbarui data."); }
@@ -232,7 +238,8 @@ function MpasiTracker({ db, userId }) {
     const handleDelete = async () => {
         if (!currentItem) return;
         try {
-            await deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/foodLog`, currentItem.id));
+            const collectionPath = `artifacts/${appId}/public/data/foodLog`;
+            await deleteDoc(doc(db, collectionPath, currentItem.id));
             setDeleteModalOpen(false); setCurrentItem(null);
         } catch (err) { setError("Gagal menghapus data."); }
     };
@@ -321,7 +328,7 @@ function MpasiTracker({ db, userId }) {
     );
 }
 
-function GrowthTracker({ db, userId, childProfile }) {
+function GrowthTracker({ db, childProfile }) {
     const [records, setRecords] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -331,15 +338,20 @@ function GrowthTracker({ db, userId, childProfile }) {
     const [newRecord, setNewRecord] = useState({ date: new Date().toISOString().split('T')[0], weight: '', height: '', headCircumference: '' });
 
     useEffect(() => {
-        if (!db || !userId) return;
-        const q = query(collection(db, `artifacts/${appId}/users/${userId}/growthRecords`));
+        if (!db) return;
+        const collectionPath = `artifacts/${appId}/public/data/growthRecords`;
+        const q = query(collection(db, collectionPath));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             data.sort((a, b) => new Date(b.date) - new Date(a.date));
             setRecords(data); setIsLoading(false);
-        }, (err) => { setError("Gagal mengambil data tumbuh kembang."); setIsLoading(false); });
+        }, (err) => { 
+            console.error("Firebase onSnapshot error:", err);
+            setError("Gagal mengambil data tumbuh kembang."); 
+            setIsLoading(false); 
+        });
         return unsubscribe;
-    }, [db, userId]);
+    }, [db]);
 
     const chartData = useMemo(() => {
         return [...records].sort((a, b) => new Date(a.date) - new Date(b.date)).map(rec => ({ name: new Date(rec.date).toLocaleDateString('id-ID', { month: 'short', day: 'numeric' }), Berat: rec.weight, Tinggi: rec.height, 'Lingkar Kepala': rec.headCircumference }));
@@ -349,7 +361,8 @@ function GrowthTracker({ db, userId, childProfile }) {
         e.preventDefault();
         if (!newRecord.date || !newRecord.weight || !newRecord.height || !newRecord.headCircumference) { alert("Semua kolom harus diisi."); return; }
         try {
-            await addDoc(collection(db, `artifacts/${appId}/users/${userId}/growthRecords`), { ...newRecord, weight: parseFloat(newRecord.weight), height: parseFloat(newRecord.height), headCircumference: parseFloat(newRecord.headCircumference), createdAt: serverTimestamp() });
+            const collectionPath = `artifacts/${appId}/public/data/growthRecords`;
+            await addDoc(collection(db, collectionPath), { ...newRecord, weight: parseFloat(newRecord.weight), height: parseFloat(newRecord.height), headCircumference: parseFloat(newRecord.headCircumference), createdAt: serverTimestamp() });
             setNewRecord({ date: new Date().toISOString().split('T')[0], weight: '', height: '', headCircumference: '' });
         } catch (err) { setError("Gagal menyimpan data."); }
     };
@@ -358,7 +371,8 @@ function GrowthTracker({ db, userId, childProfile }) {
     const handleUpdate = async () => {
         if (!currentItem) return;
         try {
-            const docRef = doc(db, `artifacts/${appId}/users/${userId}/growthRecords`, currentItem.id);
+            const collectionPath = `artifacts/${appId}/public/data/growthRecords`;
+            const docRef = doc(db, collectionPath, currentItem.id);
             await updateDoc(docRef, { ...currentItem, weight: parseFloat(currentItem.weight), height: parseFloat(currentItem.height), headCircumference: parseFloat(currentItem.headCircumference) });
             setEditModalOpen(false); setCurrentItem(null);
         } catch (err) { setError("Gagal memperbarui data."); }
@@ -368,7 +382,8 @@ function GrowthTracker({ db, userId, childProfile }) {
     const handleDelete = async () => {
         if (!currentItem) return;
         try {
-            await deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/growthRecords`, currentItem.id));
+            const collectionPath = `artifacts/${appId}/public/data/growthRecords`;
+            await deleteDoc(doc(db, collectionPath, currentItem.id));
             setDeleteModalOpen(false); setCurrentItem(null);
         } catch (err) { setError("Gagal menghapus data."); }
     };
@@ -445,7 +460,6 @@ function GrowthTracker({ db, userId, childProfile }) {
 export default function App() {
     const [view, setView] = useState('mpasi');
     const [db, setDb] = useState(null);
-    const [userId, setUserId] = useState(null);
     const [isAuthReady, setIsAuthReady] = useState(false);
     const childProfile = { gender: 'girls', birthDate: '2025-01-15' };
 
@@ -457,7 +471,7 @@ export default function App() {
             setDb(dbInstance);
             onAuthStateChanged(authInstance, async (user) => {
                 if (user) {
-                    setUserId(user.uid);
+                    // User is signed in, no need to show userId for this app
                 } else {
                     const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
                     try {
@@ -502,7 +516,7 @@ export default function App() {
             </header>
 
             <main className="container mx-auto px-4 md:px-6 py-6">
-                {view === 'mpasi' ? <MpasiTracker db={db} userId={userId} /> : <GrowthTracker db={db} userId={userId} childProfile={childProfile} />}
+                {view === 'mpasi' ? <MpasiTracker db={db} /> : <GrowthTracker db={db} childProfile={childProfile} />}
             </main>
             
             <footer className="text-center py-5 mt-8 border-t border-gray-200">
