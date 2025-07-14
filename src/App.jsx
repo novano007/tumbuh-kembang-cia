@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, doc, deleteDoc, serverTimestamp, query, updateDoc } from 'firebase/firestore';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
@@ -313,7 +313,7 @@ function GrowthTracker({ db, childProfile }) {
     const [isEditModalOpen, setEditModalOpen] = useState(false);
     const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
     const [currentItem, setCurrentItem] = useState(null);
-    const [newRecord, setNewRecord] = useState({ date: new Date().toISOString().split('T')[0], weight: '', height: '', headCircumference: '' });
+    const [newRecord, setNewRecord] = useState({ date: new Date().toISOString().split('T')[0], weight: '', height: '' });
     
     const collectionPath = `artifacts/${appId}/public/data/growthRecords`;
 
@@ -333,15 +333,15 @@ function GrowthTracker({ db, childProfile }) {
     }, [db]);
 
     const chartData = useMemo(() => {
-        return [...records].sort((a, b) => new Date(a.date) - new Date(b.date)).map(rec => ({ name: new Date(rec.date).toLocaleDateString('id-ID', { month: 'short', day: 'numeric' }), Berat: rec.weight, Tinggi: rec.height, 'Lingkar Kepala': rec.headCircumference }));
+        return [...records].sort((a, b) => new Date(a.date) - new Date(b.date)).map(rec => ({ name: new Date(rec.date).toLocaleDateString('id-ID', { month: 'short', day: 'numeric' }), Berat: rec.weight, Tinggi: rec.height }));
     }, [records]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!newRecord.date || !newRecord.weight || !newRecord.height || !newRecord.headCircumference) { alert("Semua kolom harus diisi."); return; }
+        if (!newRecord.date || !newRecord.weight || !newRecord.height) { alert("Semua kolom harus diisi."); return; }
         try {
-            await addDoc(collection(db, collectionPath), { ...newRecord, weight: parseFloat(newRecord.weight), height: parseFloat(newRecord.height), headCircumference: parseFloat(newRecord.headCircumference), createdAt: serverTimestamp() });
-            setNewRecord({ date: new Date().toISOString().split('T')[0], weight: '', height: '', headCircumference: '' });
+            await addDoc(collection(db, collectionPath), { ...newRecord, weight: parseFloat(newRecord.weight), height: parseFloat(newRecord.height), createdAt: serverTimestamp() });
+            setNewRecord({ date: new Date().toISOString().split('T')[0], weight: '', height: '' });
         } catch (err) { setError("Gagal menyimpan data."); }
     };
 
@@ -350,7 +350,7 @@ function GrowthTracker({ db, childProfile }) {
         if (!currentItem) return;
         try {
             const docRef = doc(db, collectionPath, currentItem.id);
-            await updateDoc(docRef, { ...currentItem, weight: parseFloat(currentItem.weight), height: parseFloat(currentItem.height), headCircumference: parseFloat(currentItem.headCircumference) });
+            await updateDoc(docRef, { ...currentItem, weight: parseFloat(currentItem.weight), height: parseFloat(currentItem.height) });
             setEditModalOpen(false); setCurrentItem(null);
         } catch (err) { setError("Gagal memperbarui data."); }
     };
@@ -372,11 +372,10 @@ function GrowthTracker({ db, childProfile }) {
             {error && <ErrorMessage message={error} />}
 
             <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl shadow-lg mb-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div><label className="block text-sm font-medium text-gray-600 mb-1">Tanggal</label><input type="date" name="date" value={newRecord.date} onChange={e => setNewRecord({...newRecord, date: e.target.value})} className="w-full p-2 border border-gray-300 rounded-lg" required /></div>
                     <div><label className="block text-sm font-medium text-gray-600 mb-1">Berat (kg)</label><input type="number" step="0.01" name="weight" value={newRecord.weight} onChange={e => setNewRecord({...newRecord, weight: e.target.value})} placeholder="8.5" className="w-full p-2 border border-gray-300 rounded-lg" required /></div>
                     <div><label className="block text-sm font-medium text-gray-600 mb-1">Tinggi (cm)</label><input type="number" step="0.1" name="height" value={newRecord.height} onChange={e => setNewRecord({...newRecord, height: e.target.value})} placeholder="70.5" className="w-full p-2 border border-gray-300 rounded-lg" required /></div>
-                    <div><label className="block text-sm font-medium text-gray-600 mb-1">Lingkar Kepala (cm)</label><input type="number" step="0.1" name="headCircumference" value={newRecord.headCircumference} onChange={e => setNewRecord({...newRecord, headCircumference: e.target.value})} placeholder="45.2" className="w-full p-2 border border-gray-300 rounded-lg" required /></div>
                 </div>
                 <button type="submit" className="mt-4 w-full md:w-auto bg-pink-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-pink-700">Simpan Catatan</button>
             </form>
@@ -385,7 +384,7 @@ function GrowthTracker({ db, childProfile }) {
                 <div className="bg-white p-4 rounded-xl shadow-lg mb-6">
                     <h3 className="text-xl font-bold text-pink-800 mb-4 text-center">Grafik Pertumbuhan</h3>
                     <ResponsiveContainer width="100%" height={300}>
-                        <LineChart data={chartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip /><Legend /><Line type="monotone" dataKey="Berat" stroke="#ec4899" strokeWidth={2} activeDot={{ r: 8 }} /><Line type="monotone" dataKey="Tinggi" stroke="#8b5cf6" strokeWidth={2} /><Line type="monotone" dataKey="Lingkar Kepala" stroke="#f59e0b" strokeWidth={2} /></LineChart>
+                        <LineChart data={chartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip /><Legend /><Line type="monotone" dataKey="Berat" stroke="#ec4899" strokeWidth={2} activeDot={{ r: 8 }} /><Line type="monotone" dataKey="Tinggi" stroke="#8b5cf6" strokeWidth={2} /></LineChart>
                     </ResponsiveContainer>
                 </div>
             )}
@@ -399,7 +398,7 @@ function GrowthTracker({ db, childProfile }) {
                             <div className="flex justify-between items-start">
                                 <div>
                                     <p className="font-bold text-gray-800">{new Date(record.date).toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
-                                    <p className="text-sm text-gray-600">Berat: <span className="font-semibold">{record.weight} kg</span> | Tinggi: <span className="font-semibold">{record.height} cm</span> | LK: <span className="font-semibold">{record.headCircumference} cm</span></p>
+                                    <p className="text-sm text-gray-600">Berat: <span className="font-semibold">{record.weight} kg</span> | Tinggi: <span className="font-semibold">{record.height} cm</span></p>
                                     {status && <p className={`text-sm mt-1 font-semibold ${status.status === 'Underweight' ? 'text-red-600' : 'text-green-600'}`}>{status.message}</p>}
                                 </div>
                                 <div className="flex space-x-1">
@@ -419,7 +418,6 @@ function GrowthTracker({ db, childProfile }) {
                         <div><label className="block text-sm font-medium text-gray-600 mb-1">Tanggal</label><input type="date" value={currentItem.date} onChange={e => setCurrentItem({...currentItem, date: e.target.value})} className="w-full p-2 border border-gray-300 rounded-lg" required /></div>
                         <div><label className="block text-sm font-medium text-gray-600 mb-1">Berat (kg)</label><input type="number" step="0.01" value={currentItem.weight} onChange={e => setCurrentItem({...currentItem, weight: e.target.value})} className="w-full p-2 border border-gray-300 rounded-lg" required /></div>
                         <div><label className="block text-sm font-medium text-gray-600 mb-1">Tinggi (cm)</label><input type="number" step="0.1" value={currentItem.height} onChange={e => setCurrentItem({...currentItem, height: e.target.value})} className="w-full p-2 border border-gray-300 rounded-lg" required /></div>
-                        <div><label className="block text-sm font-medium text-gray-600 mb-1">Lingkar Kepala (cm)</label><input type="number" step="0.1" value={currentItem.headCircumference} onChange={e => setCurrentItem({...currentItem, headCircumference: e.target.value})} className="w-full p-2 border border-gray-300 rounded-lg" required /></div>
                         <div className="flex justify-end gap-2"><button onClick={() => setEditModalOpen(false)} className="bg-gray-200 px-4 py-2 rounded-lg">Batal</button><button onClick={handleUpdate} className="bg-pink-600 text-white px-4 py-2 rounded-lg">Simpan</button></div>
                     </div>
                 )}
