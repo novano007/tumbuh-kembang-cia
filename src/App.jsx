@@ -36,7 +36,6 @@ const userFirebaseConfig = {
   appId: "1:613467146113:web:0f7b57787f40e277688a80"
 };
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : userFirebaseConfig;
-const appId = typeof __app_id !== 'undefined' ? __app_id : "tumbuh-kembang-cia";
 
 const getAgeInMonths = (birthDate, measurementDate) => {
     const bd = new Date(birthDate); const md = new Date(measurementDate);
@@ -102,7 +101,7 @@ function MpasiTracker({ db }) {
     const [dynamicNutritionDB, setDynamicNutritionDB] = useState(initialNutritionDB);
     const [searchingIngredient, setSearchingIngredient] = useState(null);
 
-    const collectionPath = `artifacts/${appId}/public/data/foodLog`;
+    const collectionPath = "bricia-data/food-log/entries";
 
     const calculateNutrition = (ingredients) => {
         let total = { carbs: 0, protein: 0, fat: 0 };
@@ -124,30 +123,15 @@ function MpasiTracker({ db }) {
         setError(null);
 
         try {
-            const prompt = `Berikan data gizi untuk "${ingredientName}" per 100 gram. Hanya berikan nilai karbohidrat, protein, dan lemak.`;
-            const payload = {
-              contents: [{ role: "user", parts: [{ text: prompt }] }],
-              generationConfig: {
-                  responseMimeType: "application/json",
-                  responseSchema: {
-                      type: "OBJECT",
-                      properties: { "carbs": { "type": "NUMBER" }, "protein": { "type": "NUMBER" }, "fat": { "type": "NUMBER" } },
-                      required: ["carbs", "protein", "fat"]
-                  }
-              }
-            };
-            const apiKey = ""; 
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-            
-            const response = await fetch(apiUrl, {
+            const response = await fetch(`/.netlify/functions/search-nutrition`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                body: JSON.stringify({ ingredientName })
             });
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.error.message || `API error: ${response.statusText}`);
+                throw new Error(errorData.error || `Gagal mencari gizi. Server merespon dengan status ${response.status}`);
             }
 
             const result = await response.json();
