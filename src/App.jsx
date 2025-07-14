@@ -131,36 +131,16 @@ function MpasiTracker({ db, userId }) {
         setError(null);
 
         try {
-            // This logic is for Canvas environment, which injects the key.
-            // For deployed Netlify site, the serverless function approach is needed.
-            const prompt = `Berikan data gizi untuk "${ingredientName}" per 100 gram. Hanya berikan nilai karbohidrat, protein, dan lemak.`;
-            const payload = {
-              contents: [{ role: "user", parts: [{ text: prompt }] }],
-              generationConfig: {
-                  responseMimeType: "application/json",
-                  responseSchema: {
-                      type: "OBJECT",
-                      properties: {
-                          "carbs": { "type": "NUMBER" },
-                          "protein": { "type": "NUMBER" },
-                          "fat": { "type": "NUMBER" }
-                      },
-                      required: ["carbs", "protein", "fat"]
-                  }
-              }
-            };
-            const apiKey = ""; // IMPORTANT: Leave empty for Canvas environment
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-            
-            const response = await fetch(apiUrl, {
+            // This is the correct way to call the Netlify function from the client
+            const response = await fetch(`/.netlify/functions/search-nutrition`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                body: JSON.stringify({ ingredientName })
             });
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.error.message || `API error: ${response.statusText}`);
+                throw new Error(errorData.error || `Gagal mencari gizi. Server merespon dengan status ${response.status}`);
             }
 
             const result = await response.json();
