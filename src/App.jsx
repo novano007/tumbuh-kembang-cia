@@ -36,6 +36,7 @@ const userFirebaseConfig = {
   appId: "1:613467146113:web:0f7b57787f40e277688a80"
 };
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : userFirebaseConfig;
+const appId = typeof __app_id !== 'undefined' ? __app_id : "tumbuh-kembang-cia";
 
 const getAgeInMonths = (birthDate, measurementDate) => {
     const bd = new Date(birthDate); const md = new Date(measurementDate);
@@ -101,7 +102,7 @@ function MpasiTracker({ db }) {
     const [dynamicNutritionDB, setDynamicNutritionDB] = useState(initialNutritionDB);
     const [searchingIngredient, setSearchingIngredient] = useState(null);
 
-    const collectionPath = "bricia-data/food-log/entries";
+    const collectionPath = `bricia-data/food-log/entries`;
 
     const calculateNutrition = (ingredients) => {
         let total = { carbs: 0, protein: 0, fat: 0 };
@@ -299,7 +300,7 @@ function GrowthTracker({ db, childProfile }) {
     const [currentItem, setCurrentItem] = useState(null);
     const [newRecord, setNewRecord] = useState({ date: new Date().toISOString().split('T')[0], weight: '', height: '' });
     
-    const collectionPath = `artifacts/${appId}/public/data/growthRecords`;
+    const collectionPath = `bricia-data/growth-records/entries`;
 
     useEffect(() => {
         if (!db) return;
