@@ -1,10 +1,13 @@
 // netlify/functions/search-nutrition.js
 
+// Impor 'node-fetch' jika diperlukan di lingkungan Node.js
+// Netlify Functions v2 menggunakan Node.js runtime
+const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+
 export const handler = async (event) => {
   console.log("Function search-nutrition invoked.");
 
   if (event.httpMethod !== 'POST') {
-    console.log("Method not allowed:", event.httpMethod);
     return { statusCode: 405, body: 'Method Not Allowed' };
   }
 
@@ -13,7 +16,6 @@ export const handler = async (event) => {
     console.log("Received request for ingredient:", ingredientName);
 
     if (!ingredientName) {
-      console.error("Error: Ingredient name is missing from request body.");
       return { statusCode: 400, body: 'Ingredient name is required' };
     }
 
