@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, doc, deleteDoc, serverTimestamp, query, updateDoc } from 'firebase/firestore';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
@@ -97,12 +97,12 @@ function MpasiTracker({ db }) {
     const [isEditModalOpen, setEditModalOpen] = useState(false);
     const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
     const [currentItem, setCurrentItem] = useState(null);
-    const [newEntry, setNewEntry] = useState({ date: new Date().toISOString().split('T')[0], ingredients: [{ name: '', amount: '', unit: 'g' }], reaction: '' });
+    const [newEntry, setNewEntry] = useState({ date: new Date().toISOString().split('T')[0], time: new Date().toTimeString().slice(0,5), ingredients: [{ name: '', amount: '', unit: 'g' }], reaction: '' });
     
     const [dynamicNutritionDB, setDynamicNutritionDB] = useState(initialNutritionDB);
     const [searchingIngredient, setSearchingIngredient] = useState(null);
 
-    const collectionPath = `bricia-data/food-log/entries`;
+    const collectionPath = "bricia-data/food-log/entries";
 
     const calculateNutrition = (ingredients) => {
         let total = { carbs: 0, protein: 0, fat: 0 };
@@ -161,7 +161,7 @@ function MpasiTracker({ db }) {
         const q = query(collection(db, collectionPath));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            data.sort((a, b) => new Date(b.date) - new Date(a.date));
+            data.sort((a, b) => new Date(b.date + 'T' + b.time) - new Date(a.date + 'T' + a.time));
             setEntries(data);
             setIsLoading(false);
         }, (err) => { 
@@ -185,7 +185,7 @@ function MpasiTracker({ db }) {
         if (validIngredients.length === 0) { alert("Harap masukkan setidaknya satu bahan makanan."); return; }
         try {
             await addDoc(collection(db, collectionPath), { ...newEntry, ingredients: validIngredients, createdAt: serverTimestamp() });
-            setNewEntry({ date: new Date().toISOString().split('T')[0], ingredients: [{ name: '', amount: '', unit: 'g' }], reaction: '' });
+            setNewEntry({ date: new Date().toISOString().split('T')[0], time: new Date().toTimeString().slice(0,5), ingredients: [{ name: '', amount: '', unit: 'g' }], reaction: '' });
         } catch (err) { setError("Gagal menyimpan data."); }
     };
 
@@ -228,7 +228,10 @@ function MpasiTracker({ db }) {
 
             <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl shadow-lg mb-8 space-y-4">
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div><label className="block text-sm font-medium text-gray-600 mb-1">Tanggal</label><input type="date" value={newEntry.date} onChange={e => setNewEntry({...newEntry, date: e.target.value})} className="w-full p-2 border border-gray-300 rounded-lg" required /></div>
+                    <div className="flex gap-2">
+                        <div className="w-2/3"><label className="block text-sm font-medium text-gray-600 mb-1">Tanggal</label><input type="date" value={newEntry.date} onChange={e => setNewEntry({...newEntry, date: e.target.value})} className="w-full p-2 border border-gray-300 rounded-lg" required /></div>
+                        <div className="w-1/3"><label className="block text-sm font-medium text-gray-600 mb-1">Waktu</label><input type="time" value={newEntry.time} onChange={e => setNewEntry({...newEntry, time: e.target.value})} className="w-full p-2 border border-gray-300 rounded-lg" required /></div>
+                    </div>
                     <div><label className="block text-sm font-medium text-gray-600 mb-1">Reaksi (jika ada)</label><input type="text" value={newEntry.reaction} onChange={e => setNewEntry({...newEntry, reaction: e.target.value})} placeholder="Contoh: Kemerahan" className="w-full p-2 border border-gray-300 rounded-lg" /></div>
                 </div>
                 <div>
@@ -248,7 +251,7 @@ function MpasiTracker({ db }) {
                         <div key={entry.id} className={`bg-white p-4 rounded-xl shadow-md border-l-4 ${entry.reaction ? 'border-red-400' : 'border-green-400'}`}>
                             <div className="flex justify-between items-start">
                                 <div>
-                                    <p className="font-bold text-gray-500 text-sm">{new Date(entry.date).toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                                    <p className="font-bold text-gray-500 text-sm">{new Date(entry.date).toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} - {entry.time}</p>
                                     <ul className="list-disc list-inside mt-1">{entry.ingredients.map((ing, i) => <li key={i} className="text-gray-700">{ing.name}: {ing.amount}{ing.unit}</li>)}</ul>
                                     {entry.reaction && <p className="text-sm text-red-600 font-semibold mt-1">Reaksi: {entry.reaction}</p>}
                                     <div className="text-xs text-gray-500 mt-2 flex flex-wrap gap-x-4 gap-y-1"><span>Karbo: {nutrition.carbs.toFixed(1)}g</span><span>Protein: {nutrition.protein.toFixed(1)}g</span><span>Lemak: {nutrition.fat.toFixed(1)}g</span></div>
@@ -267,7 +270,10 @@ function MpasiTracker({ db }) {
                 {currentItem && (
                     <div className="space-y-4">
                         <h3 className="text-lg font-bold text-pink-800">Edit Catatan MPASI</h3>
-                        <div><label className="block text-sm font-medium text-gray-600 mb-1">Tanggal</label><input type="date" value={currentItem.date} onChange={e => setCurrentItem({...currentItem, date: e.target.value})} className="w-full p-2 border border-gray-300 rounded-lg" required /></div>
+                        <div className="flex gap-2">
+                            <div className="w-2/3"><label className="block text-sm font-medium text-gray-600 mb-1">Tanggal</label><input type="date" value={currentItem.date} onChange={e => setCurrentItem({...currentItem, date: e.target.value})} className="w-full p-2 border border-gray-300 rounded-lg" required /></div>
+                            <div className="w-1/3"><label className="block text-sm font-medium text-gray-600 mb-1">Waktu</label><input type="time" value={currentItem.time} onChange={e => setCurrentItem({...currentItem, time: e.target.value})} className="w-full p-2 border border-gray-300 rounded-lg" required /></div>
+                        </div>
                         <div><label className="block text-sm font-medium text-gray-600 mb-1">Reaksi</label><input type="text" value={currentItem.reaction} onChange={e => setCurrentItem({...currentItem, reaction: e.target.value})} className="w-full p-2 border border-gray-300 rounded-lg" /></div>
                         <div>
                             <label className="block text-sm font-medium text-gray-600 mb-2">Bahan Makanan</label>
@@ -436,6 +442,46 @@ const LoginScreen = ({ onLogin }) => {
     );
 };
 
+// --- Komponen Scroll to Top ---
+const ScrollToTopButton = () => {
+    const [isVisible, setIsVisible] = useState(false);
+
+    const toggleVisibility = () => {
+        if (window.pageYOffset > 300) {
+            setIsVisible(true);
+        } else {
+            setIsVisible(false);
+        }
+    };
+
+    const scrollToTop = () => {
+        window.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
+    };
+
+    useEffect(() => {
+        window.addEventListener('scroll', toggleVisibility);
+        return () => {
+            window.removeEventListener('scroll', toggleVisibility);
+        };
+    }, []);
+
+    return (
+        <div className="fixed bottom-5 right-5">
+            {isVisible && 
+                <button onClick={scrollToTop} className="p-3 rounded-full bg-pink-600 text-white shadow-lg hover:bg-pink-700 focus:outline-none transition-opacity duration-300">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                    </svg>
+                </button>
+            }
+        </div>
+    );
+};
+
+
 // --- Komponen Utama Aplikasi ---
 const AppContent = ({ user, onLogout }) => {
     const [view, setView] = useState('mpasi');
@@ -474,6 +520,8 @@ const AppContent = ({ user, onLogout }) => {
                 {view === 'mpasi' ? <MpasiTracker db={db} /> : <GrowthTracker db={db} childProfile={childProfile} />}
             </main>
             
+            <ScrollToTopButton />
+
             <footer className="text-center py-5 mt-8 border-t border-gray-200">
                 <a href="https://www.tiktok.com/@novano007" target="_blank" rel="noopener noreferrer" className="text-sm text-gray-500 hover:text-pink-600">
                     &copy; 2025 @novano007
