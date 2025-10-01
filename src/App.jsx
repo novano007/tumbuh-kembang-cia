@@ -104,8 +104,49 @@ function MpasiTracker({ db }) {
 
     const [selectedMonth, setSelectedMonth] = useState('all');
     const [itemsPerPage, setItemsPerPage] = useState(10);
+    const [currentPage, setCurrentPage] = useState(1);
 
     const collectionPath = "bricia-data/food-log/entries";
+
+    useEffect(() => {
+        if (!db) return;
+        const q = query(collection(db, collectionPath));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setEntries(data);
+            setIsLoading(false);
+        }, (err) => { 
+            console.error("Firebase onSnapshot error:", err);
+            setError("Gagal mengambil data MPASI. Pastikan aturan keamanan Firebase sudah benar."); 
+            setIsLoading(false); 
+        });
+        return unsubscribe;
+    }, [db]);
+
+    const { filteredEntries, totalPages } = useMemo(() => {
+        const sorted = [...entries].sort((a, b) => new Date(b.date + 'T' + b.time) - new Date(a.date + 'T' + a.time));
+        const filtered = selectedMonth === 'all'
+            ? sorted
+            : sorted.filter(entry => entry.date.startsWith(selectedMonth));
+        const pages = Math.ceil(filtered.length / itemsPerPage);
+        return { filteredEntries: filtered, totalPages: pages };
+    }, [entries, selectedMonth, itemsPerPage]);
+
+    const displayedEntries = useMemo(() => {
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        return filteredEntries.slice(startIndex, endIndex);
+    }, [filteredEntries, currentPage, itemsPerPage]);
+    
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [selectedMonth, itemsPerPage]);
+
+    const availableMonths = useMemo(() => {
+        if (!entries.length) return [];
+        const months = new Set(entries.map(entry => entry.date.substring(0, 7))); // "YYYY-MM"
+        return Array.from(months).sort().reverse();
+    }, [entries]);
 
     const calculateNutrition = (ingredients) => {
         let total = { carbs: 0, protein: 0, fat: 0 };
@@ -158,36 +199,6 @@ function MpasiTracker({ db }) {
             setSearchingIngredient(null);
         }
     };
-
-    useEffect(() => {
-        if (!db) return;
-        const q = query(collection(db, collectionPath));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            // Data disorting di useMemo, tidak perlu di sini lagi
-            setEntries(data);
-            setIsLoading(false);
-        }, (err) => { 
-            console.error("Firebase onSnapshot error:", err);
-            setError("Gagal mengambil data MPASI. Pastikan aturan keamanan Firebase sudah benar."); 
-            setIsLoading(false); 
-        });
-        return unsubscribe;
-    }, [db]);
-
-    const availableMonths = useMemo(() => {
-        if (!entries.length) return [];
-        const months = new Set(entries.map(entry => entry.date.substring(0, 7))); // "YYYY-MM"
-        return Array.from(months).sort().reverse();
-    }, [entries]);
-
-    const displayedEntries = useMemo(() => {
-        const sorted = [...entries].sort((a, b) => new Date(b.date + 'T' + b.time) - new Date(a.date + 'T' + a.time));
-        const filtered = selectedMonth === 'all'
-            ? sorted
-            : sorted.filter(entry => entry.date.startsWith(selectedMonth));
-        return filtered.slice(0, itemsPerPage);
-    }, [entries, selectedMonth, itemsPerPage]);
 
     const handleNewIngredientChange = (index, field, value) => {
         const updatedIngredients = newEntry.ingredients.map((item, i) => i === index ? { ...item, [field]: value } : item);
@@ -261,27 +272,33 @@ function MpasiTracker({ db }) {
                 <button type="submit" className="w-full md:w-auto bg-pink-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-pink-700 transition-all">Simpan Catatan</button>
             </form>
 
-            <div className="bg-white p-4 rounded-xl shadow-md mb-6 flex flex-col md:flex-row gap-4 items-center">
-                <div className="w-full md:w-auto">
-                    <label htmlFor="month-filter" className="block text-sm font-medium text-gray-600 mb-1">Filter per Bulan:</label>
-                    <select id="month-filter" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg bg-white focus:ring-pink-500 focus:border-pink-500">
-                        <option value="all">Semua Bulan</option>
-                        {availableMonths.map(month => (
-                            <option key={month} value={month}>
-                                {new Date(month + '-02').toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}
-                            </option>
-                        ))}
-                    </select>
-                </div>
-                <div className="w-full md:w-auto">
-                    <label htmlFor="items-per-page" className="block text-sm font-medium text-gray-600 mb-1">Tampilkan:</label>
-                    <select id="items-per-page" value={itemsPerPage} onChange={e => setItemsPerPage(e.target.value === 'Infinity' ? Infinity : parseInt(e.target.value, 10))} className="w-full p-2 border border-gray-300 rounded-lg bg-white focus:ring-pink-500 focus:border-pink-500">
-                        <option value={10}>10 Catatan</option>
-                        <option value={25}>25 Catatan</option>
-                        <option value={50}>50 Catatan</option>
-                        <option value={100}>100 Catatan</option>
-                        <option value={Infinity}>Semua</option>
-                    </select>
+            <div className="bg-white p-4 rounded-xl shadow-md mb-6">
+                <div className="flex flex-col md:flex-row gap-4 items-center">
+                    <div>
+                        <label htmlFor="month-filter" className="block text-sm font-medium text-gray-600 mb-1">Filter Bulan:</label>
+                        <select id="month-filter" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="w-full md:w-auto p-2 border border-gray-300 rounded-lg bg-white focus:ring-pink-500 focus:border-pink-500">
+                            <option value="all">Semua</option>
+                            {availableMonths.map(month => (
+                                <option key={month} value={month}>{new Date(month + '-02').toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <label htmlFor="items-per-page" className="block text-sm font-medium text-gray-600 mb-1">Tampilkan:</label>
+                        <select id="items-per-page" value={itemsPerPage} onChange={e => setItemsPerPage(parseInt(e.target.value, 10))} className="w-full md:w-auto p-2 border border-gray-300 rounded-lg bg-white focus:ring-pink-500 focus:border-pink-500">
+                            <option value={10}>10</option>
+                            <option value={25}>25</option>
+                            <option value={50}>50</option>
+                        </select>
+                    </div>
+                    <div className="flex-grow"></div>
+                    {totalPages > 1 && (
+                        <div className="flex items-center gap-2">
+                             <button onClick={() => setCurrentPage(p => p - 1)} disabled={currentPage === 1} className="p-2 rounded-md bg-gray-200 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed">‹</button>
+                            <span className="text-sm text-gray-700">Halaman {currentPage} dari {totalPages}</span>
+                            <button onClick={() => setCurrentPage(p => p + 1)} disabled={currentPage === totalPages} className="p-2 rounded-md bg-gray-200 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed">›</button>
+                        </div>
+                    )}
                 </div>
             </div>
 
