@@ -102,6 +102,9 @@ function MpasiTracker({ db }) {
     const [dynamicNutritionDB, setDynamicNutritionDB] = useState(initialNutritionDB);
     const [searchingIngredient, setSearchingIngredient] = useState(null);
 
+    const [selectedMonth, setSelectedMonth] = useState('all');
+    const [itemsPerPage, setItemsPerPage] = useState(10);
+
     const collectionPath = "bricia-data/food-log/entries";
 
     const calculateNutrition = (ingredients) => {
@@ -161,7 +164,7 @@ function MpasiTracker({ db }) {
         const q = query(collection(db, collectionPath));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            data.sort((a, b) => new Date(b.date + 'T' + b.time) - new Date(a.date + 'T' + a.time));
+            // Data disorting di useMemo, tidak perlu di sini lagi
             setEntries(data);
             setIsLoading(false);
         }, (err) => { 
@@ -171,6 +174,20 @@ function MpasiTracker({ db }) {
         });
         return unsubscribe;
     }, [db]);
+
+    const availableMonths = useMemo(() => {
+        if (!entries.length) return [];
+        const months = new Set(entries.map(entry => entry.date.substring(0, 7))); // "YYYY-MM"
+        return Array.from(months).sort().reverse();
+    }, [entries]);
+
+    const displayedEntries = useMemo(() => {
+        const sorted = [...entries].sort((a, b) => new Date(b.date + 'T' + b.time) - new Date(a.date + 'T' + a.time));
+        const filtered = selectedMonth === 'all'
+            ? sorted
+            : sorted.filter(entry => entry.date.startsWith(selectedMonth));
+        return filtered.slice(0, itemsPerPage);
+    }, [entries, selectedMonth, itemsPerPage]);
 
     const handleNewIngredientChange = (index, field, value) => {
         const updatedIngredients = newEntry.ingredients.map((item, i) => i === index ? { ...item, [field]: value } : item);
@@ -244,8 +261,33 @@ function MpasiTracker({ db }) {
                 <button type="submit" className="w-full md:w-auto bg-pink-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-pink-700 transition-all">Simpan Catatan</button>
             </form>
 
+            <div className="bg-white p-4 rounded-xl shadow-md mb-6 flex flex-col md:flex-row gap-4 items-center">
+                <div className="w-full md:w-auto">
+                    <label htmlFor="month-filter" className="block text-sm font-medium text-gray-600 mb-1">Filter per Bulan:</label>
+                    <select id="month-filter" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg bg-white focus:ring-pink-500 focus:border-pink-500">
+                        <option value="all">Semua Bulan</option>
+                        {availableMonths.map(month => (
+                            <option key={month} value={month}>
+                                {new Date(month + '-02').toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+                <div className="w-full md:w-auto">
+                    <label htmlFor="items-per-page" className="block text-sm font-medium text-gray-600 mb-1">Tampilkan:</label>
+                    <select id="items-per-page" value={itemsPerPage} onChange={e => setItemsPerPage(e.target.value === 'Infinity' ? Infinity : parseInt(e.target.value, 10))} className="w-full p-2 border border-gray-300 rounded-lg bg-white focus:ring-pink-500 focus:border-pink-500">
+                        <option value={10}>10 Catatan</option>
+                        <option value={25}>25 Catatan</option>
+                        <option value={50}>50 Catatan</option>
+                        <option value={100}>100 Catatan</option>
+                        <option value={Infinity}>Semua</option>
+                    </select>
+                </div>
+            </div>
+
+
             <div className="space-y-4">
-                {entries.map(entry => {
+                {displayedEntries.map(entry => {
                     const nutrition = calculateNutrition(entry.ingredients);
                     return (
                         <div key={entry.id} className={`bg-white p-4 rounded-xl shadow-md border-l-4 ${entry.reaction ? 'border-red-400' : 'border-green-400'}`}>
@@ -469,7 +511,7 @@ const ScrollToTopButton = () => {
     }, []);
 
     return (
-        <div className="fixed bottom-5 right-5">
+        <div className="fixed bottom-5 right-5 z-20">
             {isVisible && 
                 <button onClick={scrollToTop} className="p-3 rounded-full bg-pink-600 text-white shadow-lg hover:bg-pink-700 focus:outline-none transition-opacity duration-300">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -564,3 +606,4 @@ export default function App() {
 
     return <AppContent user={user} onLogout={handleLogout} />;
 }
+
